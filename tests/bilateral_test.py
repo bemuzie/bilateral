@@ -23,18 +23,18 @@ def testit():
     vol = np.array(im[...,6][crop,crop,110:-110], dtype='float64', order='C')
     filtered_image=np.copy(vol)
 
-    for i in range(5):
+    for i in range(1):
     	print i
 
     	
     	print vol.shape
 
-    	filtered_image1,filtered_image2=cython_bilateral3d.bilateral3d_optimized( filtered_image, 
+    	filtered_image=cython_bilateral3d.bilateral3d_optimized( filtered_image, 
     											  [0.7,0.7,0.5],
     											  1,
     											  40)
         #print np.max(filtered_image2),np.min(filtered_image2),np.mean(filtered_image2)
-        filtered_image=np.array(filtered_image1,dtype='float')/np.array(filtered_image2,dtype='float')
+        
 
 
         nib.nifti1.save(nib.Nifti1Image(filtered_image, mrx), 

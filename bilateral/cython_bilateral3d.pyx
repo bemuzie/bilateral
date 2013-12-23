@@ -1,3 +1,4 @@
+# cython: profile=True
  #   Copyright 2012 Denis Nesterov
 #   cireto@gmail.com
 #
@@ -33,6 +34,11 @@ def gauss_kernel_3d(sigma,voxel_size):
     ret = np.exp( distances/ -2*(sigma**2) )
     #/ np.sqrt( np.pi*2*sigma**2)**3
     return ret
+@cython.boundscheck(False) 
+@cython.wraparound(False)
+@cython.cdivision(True)
+cdef inline double calc_weight(double img_value1, double img_value2, double gauss_weight, double sigi_double_sqr):
+    return gauss_weight*exp( -((img_value1-img_value2)**2)/ sigi_double_sqr )
 
 
 @cython.boundscheck(False) 
@@ -93,19 +99,24 @@ def bilateral3d(np.ndarray[DTYPEfloat_t, ndim=3, mode="c"] data,voxel_size,doubl
                     result[x,y,z]= value/weights
     return result
 
+
 @cython.boundscheck(False) 
 @cython.wraparound(False)
 @cython.cdivision(True)
-def bilateral3d_optimized(np.ndarray[DTYPEfloat_t, ndim=3, mode="c"] data,voxel_size,double sigg,double sigi):
+def bilateral3d_optimized(double [:,:,:] data,voxel_size,double sigg,double sigi):
     if data.ndim<3:
         raise ValueError("Input image should have 4 dimensions")
 
-    assert data.dtype == DTYPEfloat
+    #assert data.dtype == DTYPEfloat
 
     #make 3d gaussian kernel
     g_kernel=gauss_kernel_3d(sigg, voxel_size)
     #making it asimmetrical. The first element of new kernel should be the cenral element of old
-    cdef np.ndarray[DTYPEfloat_t, ndim=3, mode="c"] gauss_kernel = np.asarray( g_kernel[ [slice(i/2,i) for i in g_kernel.shape] ],
+    #cdef np.ndarray[DTYPEfloat_t, ndim=3, mode="c"] gauss_kernel = np.asarray( g_kernel[ [slice(i/2,i) for i in g_kernel.shape] ],
+    #                                                                           dtype=DTYPEfloat,
+    #                                                                           order='C'
+    #                                                                           )
+    cdef np.ndarray[DTYPEfloat_t, ndim=3, mode="strided"] gauss_kernel = np.asarray( g_kernel,
                                                                                dtype=DTYPEfloat,
                                                                                order='C'
                                                                                )
@@ -116,38 +127,41 @@ def bilateral3d_optimized(np.ndarray[DTYPEfloat_t, ndim=3, mode="c"] data,voxel_
     print ker_side_x, ker_side_y, ker_side_z
 
     #make "buffer" arrays for results
-    cdef np.ndarray[DTYPEfloat_t, ndim=3, mode="c"] result_values=np.zeros([img_size_x,img_size_y,img_size_z],dtype=DTYPEfloat)
-    cdef np.ndarray[DTYPEfloat_t, ndim=3, mode="c"] result_weights=np.zeros([img_size_x,img_size_y,img_size_z],dtype=DTYPEfloat)
+    cdef double [:,:,:] result_values=np.zeros([img_size_x,img_size_y,img_size_z],dtype=DTYPEfloat)
+    cdef double [:,:,:] result_weights=np.zeros([img_size_x,img_size_y,img_size_z],dtype=DTYPEfloat)
 
 
 
     cdef unsigned int ker_step_x, ker_step_y, ker_step_z, x, y, z
-
+    cdef signed int img_step_x, img_step_y, img_step_z
     cdef double sigi_double_sqr = 2*sigi**2
     cdef double img_value1, img_value2, gauss_weight, intensity_weight, weight
-
-    for ker_step_x in range(ker_side_x):
-        for ker_step_y in range(ker_side_y):
-            for ker_step_z in range(ker_side_z):
+    for ker_step_x in range(ker_side_x//2,ker_side_x):
+        img_step_x = ker_step_x-ker_side_x//2
+        for ker_step_y in range(0,ker_side_y):
+            img_step_y = ker_step_y-ker_side_y//2
+            if img_step_x==0 and img_step_y>0:
+                continue
+            for ker_step_z in range(0,ker_side_z):
+                img_step_z = ker_step_z-ker_side_z//2
+                if img_step_x==0 and img_step_y==0 and img_step_z>0:
+                     continue
                 gauss_weight = gauss_kernel [ker_step_x, ker_step_y, ker_step_z]
-                
-                for x in range(img_size_x-ker_side_x):
-                    for y in range(img_size_y-ker_side_y):
-                        for z in range(img_size_z-ker_side_z):
-                            img_value1 = data [x, y, z]
-                            img_value2 = data [x+ker_step_x, y+ker_step_y, z+ker_step_z]
+
+
+                for x in range(ker_side_x//2, img_size_x-ker_step_x):
+                    for y in range(ker_side_y//2, img_size_y-ker_step_y):
+                        for z in range(ker_side_z//2, img_size_z-ker_step_z):
+                            img_value1 = data[x, y, z]
+                            img_value2 = data [x+img_step_x, y+img_step_y, z+img_step_z]
                             
-                            intensity_weight = exp( -((img_value1-img_value2)**2)/ sigi_double_sqr )
-
-
-                            weight = intensity_weight*gauss_weight
-
+                            #weight = calc_weight(img_value1, img_value2, gauss_weight, sigi_double_sqr)
+                            weight = gauss_weight * exp( -((img_value1-img_value2)**2)/ sigi_double_sqr )
                             result_values [x, y, z] += img_value2*weight
-                            result_values [x+ker_step_x, y+ker_step_y, z+ker_step_z] += img_value1*weight
+                            result_values [x+img_step_x, y+img_step_y, z+img_step_z] += img_value1*weight
                             result_weights [x, y, z] += weight
-                            result_weights [x+ker_step_x, y+ker_step_y, z+ker_step_z] += weight
-
-    return result_values,result_weights
+                            result_weights [x+img_step_x, y+img_step_y, z+img_step_z] += weight
+    return np.array(result_values)/np.array(result_weights)
 
 @cython.boundscheck(False) 
 @cython.wraparound(False)
