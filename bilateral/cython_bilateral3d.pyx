@@ -14,12 +14,12 @@ cimport cython
 
 
 DTYPE= np.int
-DTYPEfloat = np.float64
+DTYPEfloat = np.float32
 ctypedef np.int_t DTYPE_t
-ctypedef np.float64_t DTYPEfloat_t
+ctypedef np.float32_t DTYPEfloat_t
 
 cdef extern from "math.h":
-     double exp(double x)
+     float exp(float x)
 
 
 def gauss_kernel_3d(sigma,voxel_size):
@@ -103,7 +103,7 @@ def bilateral3d(np.ndarray[DTYPEfloat_t, ndim=3, mode="c"] data,voxel_size,doubl
 @cython.boundscheck(False) 
 @cython.wraparound(False)
 @cython.cdivision(True)
-def bilateral3d_optimized(double [:,:,:] data,voxel_size,double sigg,double sigi):
+def bilateral3d_optimized(float [:,:,:] data,voxel_size,float sigg,float sigi):
     if data.ndim<3:
         raise ValueError("Input image should have 4 dimensions")
 
@@ -127,15 +127,15 @@ def bilateral3d_optimized(double [:,:,:] data,voxel_size,double sigg,double sigi
     print ker_side_x, ker_side_y, ker_side_z
 
     #make "buffer" arrays for results
-    cdef double [:,:,:] result_values=np.zeros([img_size_x,img_size_y,img_size_z],dtype=DTYPEfloat)
-    cdef double [:,:,:] result_weights=np.zeros([img_size_x,img_size_y,img_size_z],dtype=DTYPEfloat)
+    cdef float [:,:,:] result_values=np.zeros([img_size_x,img_size_y,img_size_z],dtype=DTYPEfloat)
+    cdef float [:,:,:] result_weights=np.zeros([img_size_x,img_size_y,img_size_z],dtype=DTYPEfloat)
 
 
 
     cdef unsigned int ker_step_x, ker_step_y, ker_step_z, x, y, z
     cdef signed int img_step_x, img_step_y, img_step_z
-    cdef double sigi_double_sqr = 2*sigi**2
-    cdef double img_value1, img_value2, gauss_weight, intensity_weight, weight
+    cdef float sigi_double_sqr = 2*sigi**2
+    cdef float img_value1, img_value2, gauss_weight, intensity_weight, weight
     for ker_step_x in range(ker_side_x//2,ker_side_x):
         img_step_x = ker_step_x-ker_side_x//2
         for ker_step_y in range(0,ker_side_y):
@@ -236,7 +236,7 @@ def bilateral_function(np.ndarray[DTYPEfloat_t, ndim=1, mode="c"] data,
     cdef unsigned int i
     central_px=data[central_idx]
 
-    value = 0
+    
     weights = 0
     if central_px< -100. or central_px> 200:
         return central_px

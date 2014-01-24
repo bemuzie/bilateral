@@ -6,8 +6,8 @@ import nibabel as nib
 import os
 
 def testit():
-    folder='/home/denest/PERF_volumes/SEREBRENNIKOVA N.A. 16.03.1958/20131219_TX-1821/nii/'
-    name='20131219_115622LiverPerfusionHighMASEREBRENNIKOVANA16031958s012a001.nii'
+    folder='/home/denest/Share/'
+    name='20140113_112804LAGUNOVAVV21011939.nii'
 
 
     f = nib.load(os.path.join(folder,name))
